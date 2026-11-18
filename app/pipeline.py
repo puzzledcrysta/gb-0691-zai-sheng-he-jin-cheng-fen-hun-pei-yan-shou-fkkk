@@ -5,19 +5,24 @@ from app.modules.m4_blend.service import execute as stage4
 from app.modules.m5_uncertainty.service import execute as stage5
 from app.modules.m6_acceptance.service import execute as stage6
 from app.modules.m7_reblend.service import execute as stage7
+from app.modules.m8_release.service import execute as stage8
 from app.config import SAMPLE
 from app.manifest import make
 from app.numeric import serial
 from time import perf_counter
-def calculate(text=None, stop=7):
+def calculate(text=None, stop=8, orders=None, now=None, retest_hours=None):
     started=perf_counter()
     if text is None: text=SAMPLE.read_text(encoding='utf-8-sig')
     if not isinstance(text,str):
         from app.errors import DomainError
         raise DomainError('TYPE','CSV必须是文本')
-    ctx={'text':text,'rows':[],'quarantine':[],'stages':{},'manifest':make(text)}
+    ctx={'text':text,'rows':[],'quarantine':[],'stages':{},'manifest':make(text),
+         'orders':orders,'now':now,'retest_hours':retest_hours}
     for stage in STAGES[:stop]: stage(ctx)
     ctx['manifest']['elapsed_ms']=round((perf_counter()-started)*1000,3)
+    if orders is not None: ctx['manifest']['parameters']['orders']='自定义'
+    if now is not None: ctx['manifest']['parameters']['now']=now
+    if retest_hours is not None: ctx['manifest']['parameters']['retest_hours']=retest_hours
     ctx.pop('text',None)
     return serial(ctx)
-STAGES=[stage1,stage2,stage3,stage4,stage5,stage6,stage7]
+STAGES=[stage1,stage2,stage3,stage4,stage5,stage6,stage7,stage8]

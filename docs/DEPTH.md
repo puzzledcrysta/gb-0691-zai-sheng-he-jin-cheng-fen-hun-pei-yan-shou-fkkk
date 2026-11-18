@@ -15,6 +15,7 @@
 | M5 不确定区间 | 运行不确定区间并复核证据 | `POST /api/m5`；`/work/5` | `app/modules/m5_uncertainty/rules.py` | `tests/test_m5.py` |
 | M6 验收对照 | 运行验收对照并复核证据 | `POST /api/m6`；`/work/6` | `app/modules/m6_acceptance/rules.py` | `tests/test_m6.py` |
 | M7 复配批次 | 运行复配批次并复核证据 | `POST /api/m7`；`/work/7` | `app/modules/m7_reblend/rules.py` | `tests/test_m7.py` |
+| M8 截单放行 | 区间判牌号、按截单决定放行或等补测、开立放行单 | `POST /api/m8`；`POST /api/releases`；`/work/8` | `app/modules/m8_release/rules.py`、`app/store.py` | `tests/test_m8.py`、`tests/test_m8_api.py` |
 
 ## 陷阱登记
 
@@ -28,6 +29,9 @@
 | TRAP-15 | 吨与千克 | 静默覆盖或误计 | 显式裁决并保留证据 | `app/modules/m2_assay/rules.py` | `tests/test_m2.py::test_units` |
 | TRAP-19 | 批号元数据冲突优先 | 静默覆盖或误计 | 显式裁决并保留证据 | `app/modules/m3_recipe/rules.py` | `tests/test_m3.py::test_conflicting_lot_mass` |
 | TRAP-25 | 配方版本锁定 | 静默覆盖或误计 | 显式裁决并保留证据 | `app/modules/m3_recipe/rules.py` | `tests/test_m3.py::test_version_lock` |
+| TRAP-31 | 跨界区间不可按单点放行 | 取下限直接判合格放行 | 整区间对照限值给合格/待确认/不合格，待确认不放行 | `app/modules/m8_release/rules.py` | `tests/test_m8.py::test_straddling_limit_is_pending_not_pass` |
+| TRAP-32 | 截单与补测时间窗权衡 | 一律等补测或一律低牌号放行 | 补测赶得上低牌号截单则等补测，赶不上才低牌号放行 | `app/modules/m8_release/rules.py` | `tests/test_m8.py::test_low_pass_high_pending_release_when_retest_misses_low_cutoff` |
+| TRAP-33 | 同炉次并发重复放行 | 重试或双人提交产生多份放行单 | releases 表 batch 唯一约束 + idem_key 幂等，冲突409 | `app/store.py` | `tests/test_m8_api.py::test_concurrent_same_batch_only_one_release` |
 
 ## 对账规则
 

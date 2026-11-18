@@ -1,7 +1,15 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+import unicodedata
 from app.numeric import number, fmt
 from app.errors import DomainError
 TARGETS={'Cu':(Decimal('7.5'),Decimal('12.5')),'Zn':(Decimal('3'),Decimal('7'))}
+# 截单放行牌号规格：高牌号区间嵌套于低牌号之内，限值显式声明不外推
+GRADES={
+ '高牌号':{'code':'H','Cu':(Decimal('8'),Decimal('11')),'Zn':(Decimal('4'),Decimal('6'))},
+ '低牌号':{'code':'L','Cu':(Decimal('7.5'),Decimal('12.5')),'Zn':(Decimal('3'),Decimal('7'))},
+}
+GRADE_ORDER=['高牌号','低牌号']
+DEFAULT_RETEST_HOURS=8
 def mass_kg(value,unit):
     if unit not in ('kg','t'): raise DomainError('UNIT','重量单位无效')
     value=number(value)*(1000 if unit=='t' else 1)

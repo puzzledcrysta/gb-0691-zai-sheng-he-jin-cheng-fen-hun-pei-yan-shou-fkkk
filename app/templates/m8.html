@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block release_block %}
+<div class="panel-grid release-grid">
+  <section class="panel span-all">
+    <div class="panel__head"><h2>截单裁决</h2><span>判定时刻 {{current.rows[0]['判定时刻_UTC'] if current.rows else '—'}} · 补测完成 {{current.rows[0]['补测完成_UTC'] if current.rows else '—'}}</span></div>
+    <div class="panel__body">
+      {% for r in current.rows %}
+      <article class="decision decision--{{r['决定']}}">
+        <div class="decision__head">
+          <h3>炉次 {{r['炉次']}}</h3>
+          <span class="badge badge--{{r['决定']}}">{{r['决定']}}</span>
+          {% if r['放行牌号']!='—' %}<span class="grade-tag">{{r['放行牌号']}}</span>{% endif %}
+        </div>
+        <p class="basis">{{r['依据']}}</p>
+        <div class="decision__meta">
+          <span>高牌号判定：<b class="state--{{r['高牌号判定']}}">{{r['高牌号判定']}}</b></span>
+          <span>低牌号判定：<b class="state--{{r['低牌号判定']}}">{{r['低牌号判定']}}</b></span>
+          {% set existing = releases | selectattr('batch','equalto',r['炉次']) | list %}
+          {% if existing %}
+          <span class="released">已开放行单：{{existing[0]['id'][:8]}} · {{existing[0]['grade']}} · 订单{{existing[0]['order_id']}}</span>
+          {% elif r['决定']=='放行' %}
+          <button class="primary" data-release data-batch="{{r['炉次']}}" data-grade="{{r['放行牌号']}}">开立放行单（{{r['放行牌号']}}）</button>
+          {% endif %}
+        </div>
+      </article>
+      {% else %}
+      <div class="empty">当前批次没有炉次判定结果。</div>
+      {% endfor %}
+      <div id="release-feedback" role="status" class="alert"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head"><h2>完整区间 × 牌号限值</h2><span>质量分数 %</span></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>炉次</th><th>牌号</th><th>元素</th><th>区间下界</th><th>区间上界</th><th>规格下限</th><th>规格上限</th><th>判定</th></tr></thead>
+        <tbody>
+          {% for r in current.rows %}{% for grade in ['高牌号','低牌号'] %}{% for e in r['元素判定'][grade]['elements'] %}
+          <tr><td>{{r['炉次']}}</td><td>{{grade}}</td><td>{{e['元素']}}</td><td>{{e['含量下界_pct']|display}}</td><td>{{e['含量上界_pct']|display}}</td><td>{{e['规格下限_pct']|display}}</td><td>{{e['规格上限_pct']|display}}</td><td class="state--{{e['状态']}}">{{e['状态']}}</td></tr>
+          {% endfor %}{% endfor %}{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div>
+    <section class="panel">
+      <div class="panel__head"><h2>订单截单</h2><span>UTC</span></div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>订单</th><th>牌号</th><th>炉次</th><th>截单时间</th><th>状态</th></tr></thead>
+          <tbody>
+            {% for r in current.rows %}{% for o in r['订单'] %}
+            <tr><td>{{o['order_id']}}</td><td>{{o['grade']}}</td><td>{{o['炉次']}}</td><td>{{o['cutoff']}}</td><td class="{{'sev--warn' if o['状态']=='已截单'}}">{{o['状态']}}</td></tr>
+            {% endfor %}{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><h2>已生效放行单</h2><span>{{releases|length}} 份</span></div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>单号</th><th>炉次</th><th>牌号</th><th>订单</th><th>开立时间</th></tr></thead>
+          <tbody>
+            {% for f in releases %}
+            <tr><td>{{f['id'][:8]}}</td><td>{{f['batch']}}</td><td>{{f['grade']}}</td><td>{{f['order_id']}}</td><td>{{f['created_at']}}</td></tr>
+            {% else %}
+            <tr><td colspan="5" class="empty">尚无放行单</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel span-all">
+    <div class="panel__head"><h2>截单试算（不覆盖本批次，仅临时复算）</h2><span>What-if</span></div>
+    <div class="panel__body">
+      <details open>
+        <summary>调整订单、判定时刻与补测时长</summary>
+        <div class="whatif">
+          <label>订单 CSV
+            <textarea id="orders-csv" aria-label="订单CSV">{{orders_sample}}</textarea>
+          </label>
+          <label>判定时刻（留空取当前 UTC）
+            <input id="now-iso" type="text" placeholder="2026-11-18T20:00:00Z">
+          </label>
+          <label>补测时长（小时）
+            <input id="retest-hours" type="text" value="8">
+          </label>
+        </div>
+        <div class="controls"><button id="whatif-run">试算</button><span id="whatif-feedback" class="alert"></span></div>
+        <div id="whatif-out" class="whatif-out"></div>
+      </details>
+    </div>
+  </section>
+</div>
+{% endblock %}

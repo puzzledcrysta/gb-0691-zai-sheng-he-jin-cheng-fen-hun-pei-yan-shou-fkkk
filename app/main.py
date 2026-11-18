@@ -3,7 +3,7 @@ import csv,io
 from app.errors import DomainError
 from app.reader import decode
 from app.pipeline import calculate
-from app.store import save, latest, history, review, get_run
+from app.store import save, latest, history, review, get_run, create_release, list_releases
 from app.web import bp as web
 
 from app.modules.m1_receiving.handler import bp as bp1
@@ -13,6 +13,7 @@ from app.modules.m4_blend.handler import bp as bp4
 from app.modules.m5_uncertainty.handler import bp as bp5
 from app.modules.m6_acceptance.handler import bp as bp6
 from app.modules.m7_reblend.handler import bp as bp7
+from app.modules.m8_release.handler import bp as bp8
 app=Flask(__name__)
 app.config['MAX_CONTENT_LENGTH']=5*1024*1024
 app.json.ensure_ascii=False
@@ -32,6 +33,7 @@ app.register_blueprint(bp4)
 app.register_blueprint(bp5)
 app.register_blueprint(bp6)
 app.register_blueprint(bp7)
+app.register_blueprint(bp8)
 @app.before_request
 def validate_request_object():
     if request.method!='POST': return None
@@ -55,7 +57,9 @@ def run():
         raw=request.files['file'].read();text=decode(raw)
     else:
         payload=request.get_json(silent=True) or {};text=payload.get('csv')
-    return jsonify(save(calculate(text)))
+    payload=request.get_json(silent=True) or {}
+    return jsonify(save(calculate(text,orders=payload.get('orders'),now=payload.get('now'),
+                                  retest_hours=payload.get('retest_hours'))))
 @app.route('/api/runs/<ident>')
 def run_detail(ident): return jsonify(get_run(ident))
 @app.route('/api/history')
@@ -66,6 +70,28 @@ def decide():
     try: version=int(body.get('revision',0))
     except (ValueError,TypeError): raise DomainError('VERSION','版本必须为整数')
     return jsonify(review(body.get('id'),version,body.get('decision')))
+@app.route('/api/releases',methods=['GET','POST'])
+def releases():
+    if request.method=='GET':
+        return jsonify(list_releases(request.args.get('batch')))
+    body=request.get_json(silent=True) or {}
+    run=get_run(body.get('run_id'))
+    batch=str(body.get('batch') or '').strip();grade=str(body.get('grade') or '').strip()
+    if grade not in ('高牌号','低牌号'): raise DomainError('RELEASE','放行牌号无效')
+    stage=run['stages'].get('8')
+    if stage is None:
+        # 旧版本批次没有第8阶段：用默认订单与当前时刻离线重算演示裁决，不改变已存批次
+        from app.pipeline import calculate as recalc
+        stage=recalc(stop=8)['stages']['8']
+    decision=next((r for r in stage['rows'] if r['炉次']==batch),None)
+    if decision is None: raise DomainError('RELEASE','炉次不在该批次判定结果中')
+    if decision[grade+'判定']!='合格':
+        raise DomainError('RELEASE','该牌号完整区间未全部合格，不能放行，须等补测或改判',422)
+    order=next((o for o in decision['订单'] if o['grade']==grade and o['状态']=='未截单'),None)
+    if order is None: raise DomainError('RELEASE','没有该牌号的未截单订单，放行无接收对象',422)
+    saved=create_release({'batch':batch,'grade':grade,'run_id':body.get('run_id'),
+                          'order_id':order['order_id'],'idem_key':body.get('idem_key')})
+    return jsonify(saved),201
 @app.route('/api/evidence.csv')
 def evidence():
     result=get_run(request.args['run_id']) if request.args.get('run_id') else (latest() or save(calculate()));out=io.StringIO(newline='')
